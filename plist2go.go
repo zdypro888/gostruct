@@ -46,6 +46,8 @@ func (gp goplist) item(key string, value interface{}) *property {
 		Key:  key,
 	}
 	switch object := value.(type) {
+	case bool:
+		prop.Type = "bool"
 	case int:
 		prop.Type = "int"
 	case int64:
@@ -60,6 +62,8 @@ func (gp goplist) item(key string, value interface{}) *property {
 		prop.Type = "string"
 	case time.Time:
 		prop.Type = "time.Time"
+	case []uint8:
+		prop.Type = "[]byte"
 	case []interface{}:
 		prop.Type = gp.array(key, object)
 	case map[string]interface{}:

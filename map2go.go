@@ -27,6 +27,8 @@ func writeValue(writer io.StringWriter, value interface{}) {
 		writer.WriteString("\"")
 		writer.WriteString(object)
 		writer.WriteString("\"")
+	case []uint8:
+		writeData(writer, object)
 	case []interface{}:
 		writeSlice(writer, object)
 	case map[string]interface{}:
@@ -36,6 +38,13 @@ func writeValue(writer io.StringWriter, value interface{}) {
 	}
 }
 
+func writeData(writer io.StringWriter, data []uint8) {
+	writer.WriteString("[]byte{\n")
+	for _, value := range data {
+		writer.WriteString(fmt.Sprintf("%#x", value))
+	}
+	writer.WriteString("}")
+}
 func writeSlice(writer io.StringWriter, slice []interface{}) {
 	writer.WriteString("[]interface{}{\n")
 	for _, value := range slice {
