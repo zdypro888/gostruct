@@ -2,37 +2,48 @@ package gostruct
 
 import (
 	"bytes"
+	"io/ioutil"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/stoewer/go-strcase"
+	"howett.net/plist"
 )
 
-type property struct {
-	Name string
-	Type string
-	Key  string
+type AnalyseProperty struct {
+	Parent string
+	Name   string
+	Type   string
+	Key    string
 }
 
-type gostruct map[string]*property
+type AnalyseStruct struct {
+	Name       string
+	Properties []*AnalyseProperty
+	Depth      int
+}
+type Analyzing struct {
+	Structs []*AnalyseStruct
+}
 
-type goplist map[string]gostruct
-
-func (gp goplist) String() string {
+func (analyzing *Analyzing) String() string {
 	gwriter := &bytes.Buffer{}
-	for name, object := range gp {
+	for _, struct_ := range analyzing.Structs {
 		writer := &bytes.Buffer{}
 		writer.WriteString("type ")
-		writer.WriteString(name)
+		writer.WriteString(struct_.Name)
 		writer.WriteString(" struct {\n")
-		for _, prop := range object {
+		for _, field := range struct_.Properties {
 			writer.WriteString("\t")
-			writer.WriteString(prop.Name)
+			writer.WriteString(field.Name)
 			writer.WriteString(" ")
-			writer.WriteString(prop.Type)
+			writer.WriteString(field.Type)
 			writer.WriteString(" `plist:\"")
-			writer.WriteString(prop.Key)
-			writer.WriteString("\"`\n")
+			writer.WriteString(field.Key)
+			writer.WriteString(",omitempty\" bson:\"")
+			writer.WriteString(field.Key)
+			writer.WriteString(",omitempty\"`\n")
 		}
 		writer.WriteString("}\n")
 		gwriter.WriteString(writer.String())
@@ -40,69 +51,97 @@ func (gp goplist) String() string {
 	return gwriter.String()
 }
 
-func (gp goplist) item(key string, value interface{}) *property {
-	prop := &property{
-		Name: strcase.UpperCamelCase(key),
-		Key:  key,
-	}
+func (analyzing *Analyzing) fieldName(name string) string {
+	name = strings.ReplaceAll(name, ".", "_")
+	return strcase.UpperCamelCase(name)
+}
+
+func (analyzing *Analyzing) Analyse(depth int, property *AnalyseProperty, value interface{}) {
 	switch object := value.(type) {
 	case bool:
-		prop.Type = "bool"
+		property.Type = "bool"
 	case int:
-		prop.Type = "int"
+		property.Type = "int"
 	case int64:
-		prop.Type = "int64"
+		property.Type = "int64"
 	case uint64:
-		prop.Type = "uint64"
+		property.Type = "uint64"
 	case float32:
-		prop.Type = "float32"
+		property.Type = "float32"
 	case float64:
-		prop.Type = "float64"
+		property.Type = "float64"
 	case string:
-		prop.Type = "string"
+		property.Type = "string"
 	case time.Time:
-		prop.Type = "time.Time"
+		property.Type = "time.Time"
 	case []uint8:
-		prop.Type = "[]byte"
+		property.Type = "[]byte"
 	case []interface{}:
-		prop.Type = gp.array(key, object)
+		if len(object) == 0 {
+			property.Type = "[]any"
+		} else {
+			analyzing.AnalyseSlice(depth, property, object)
+		}
 	case map[string]interface{}:
-		prop.Type = gp.dict(strcase.UpperCamelCase(key), object)
+		analyzing.AnalyseMap(depth, property, object)
 	default:
 		panic(reflect.TypeOf(object))
 	}
-	return prop
 }
 
-func (gp goplist) array(key string, values []interface{}) string {
-	props := make([]*property, len(values))
+func (analyzing *Analyzing) AnalyseSlice(depth int, property *AnalyseProperty, values []interface{}) {
+	properties := make([]*AnalyseProperty, len(values))
 	for i, value := range values {
-		props[i] = gp.item(key, value)
-	}
-	return "[]" + props[0].Name
-}
-
-func (gp goplist) dict(name string, messages map[string]interface{}) string {
-	object := make(gostruct)
-	for key, value := range messages {
-		prop := gp.item(key, value)
-		object[prop.Name] = prop
-	}
-	if oldobj, ok := gp[name]; ok {
-		for key, value := range object {
-			if _, pok := oldobj[key]; !pok {
-				oldobj[key] = value
-			}
+		properties[i] = &AnalyseProperty{
+			Parent: property.Name,
+			Name:   property.Name,
+			Key:    property.Key,
 		}
-	} else {
-		gp[name] = object
+		analyzing.Analyse(depth+1, properties[i], value)
 	}
-	return name
+	property.Type = "[]" + properties[0].Type
+}
+func (analyzing *Analyzing) AnalyseMap(depth int, property *AnalyseProperty, value map[string]interface{}) {
+	structName := property.Name
+	var structProperties []*AnalyseProperty
+	for name, field := range value {
+		fieldProperty := &AnalyseProperty{
+			Parent: structName,
+			Name:   analyzing.fieldName(name),
+			Key:    name,
+		}
+		analyzing.Analyse(depth+1, fieldProperty, field)
+		structProperties = append(structProperties, fieldProperty)
+	}
+	for _, struct_ := range analyzing.Structs {
+		if struct_.Name == structName {
+			structName = property.Parent + structName
+			break
+		}
+	}
+	analyzing.Structs = append(analyzing.Structs, &AnalyseStruct{
+		Name:       structName,
+		Properties: structProperties,
+		Depth:      depth,
+	})
+	property.Type = "*" + structName
 }
 
-//PlistToGo plist 到 go 结构体
-func PlistToGo(name string, plistmap map[string]interface{}) string {
-	gp := make(goplist)
-	gp.dict(name, plistmap)
-	return gp.String()
+//Plist2Go plist 到 go 结构体
+func Plist2Go(name string, plistmap map[string]interface{}) string {
+	analyzse := &Analyzing{}
+	analyzse.Analyse(0, &AnalyseProperty{Name: name}, plistmap)
+	return analyzse.String()
+}
+
+func PlistFile2Go(file string) error {
+	data, err := ioutil.ReadFile(file)
+	if err != nil {
+		return err
+	}
+	structmap := make(map[string]interface{})
+	if _, err = plist.Unmarshal(data, structmap); err != nil {
+		return err
+	}
+	return ioutil.WriteFile("request.go", []byte(Plist2Go("Request", structmap)), 0644)
 }

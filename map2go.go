@@ -73,7 +73,7 @@ func writeMap(writer io.StringWriter, mapval map[string]interface{}) {
 	writer.WriteString("}")
 }
 
-//GOString GO 定义
+//GOString 把Map信息写出到Go定义格式 map[string]interface { "a" : "b", "c" : 0x0d }
 func GOString(mapval map[string]interface{}) string {
 	writer := &bytes.Buffer{}
 	writeMap(writer, mapval)
