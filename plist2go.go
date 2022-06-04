@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/stoewer/go-strcase"
-	"howett.net/plist"
+	"github.com/zdypro888/go-plist"
 )
 
 type AnalyseProperty struct {
