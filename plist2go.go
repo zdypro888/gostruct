@@ -2,7 +2,7 @@ package gostruct
 
 import (
 	"bytes"
-	"io/ioutil"
+	"os"
 	"reflect"
 	"strings"
 	"time"
@@ -127,7 +127,7 @@ func (analyzing *Analyzing) AnalyseMap(depth int, property *AnalyseProperty, val
 	property.Type = "*" + structName
 }
 
-//Plist2Go plist 到 go 结构体
+// Plist2Go plist 到 go 结构体
 func Plist2Go(name string, plistmap map[string]interface{}) string {
 	analyzse := &Analyzing{}
 	analyzse.Analyse(0, &AnalyseProperty{Name: name}, plistmap)
@@ -135,7 +135,7 @@ func Plist2Go(name string, plistmap map[string]interface{}) string {
 }
 
 func PlistFile2Go(file string) error {
-	data, err := ioutil.ReadFile(file)
+	data, err := os.ReadFile(file)
 	if err != nil {
 		return err
 	}
@@ -143,5 +143,5 @@ func PlistFile2Go(file string) error {
 	if _, err = plist.Unmarshal(data, structmap); err != nil {
 		return err
 	}
-	return ioutil.WriteFile("request.go", []byte(Plist2Go("Request", structmap)), 0644)
+	return os.WriteFile("request.go", []byte(Plist2Go("Request", structmap)), 0644)
 }
