@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
 	"reflect"
 	"sort"
 	"strconv"
+
+	"github.com/zdypro888/go-plist"
 )
 
-func writeValue(writer io.StringWriter, value interface{}) {
+func writeValue(writer io.StringWriter, value any) {
 	switch object := value.(type) {
 	case bool:
 		writer.WriteString(fmt.Sprintf("%v", object))
@@ -29,9 +32,9 @@ func writeValue(writer io.StringWriter, value interface{}) {
 		writer.WriteString("\"")
 	case []uint8:
 		writeData(writer, object)
-	case []interface{}:
+	case []any:
 		writeSlice(writer, object)
-	case map[string]interface{}:
+	case map[string]any:
 		writeMap(writer, object)
 	default:
 		panic(reflect.TypeOf(object))
@@ -41,12 +44,12 @@ func writeValue(writer io.StringWriter, value interface{}) {
 func writeData(writer io.StringWriter, data []uint8) {
 	writer.WriteString("[]byte{\n")
 	for _, value := range data {
-		writer.WriteString(fmt.Sprintf("%#x", value))
+		writer.WriteString(fmt.Sprintf("0x%02x, ", value))
 	}
 	writer.WriteString("}")
 }
-func writeSlice(writer io.StringWriter, slice []interface{}) {
-	writer.WriteString("[]interface{}{\n")
+func writeSlice(writer io.StringWriter, slice []any) {
+	writer.WriteString("[]any{\n")
 	for _, value := range slice {
 		writeValue(writer, value)
 		writer.WriteString(",\n")
@@ -54,8 +57,8 @@ func writeSlice(writer io.StringWriter, slice []interface{}) {
 	writer.WriteString("}")
 }
 
-func writeMap(writer io.StringWriter, mapval map[string]interface{}) {
-	writer.WriteString("map[string]interface{}{\n")
+func writeMap(writer io.StringWriter, mapval map[string]any) {
+	writer.WriteString("map[string]any{\n")
 	keys := make([]string, len(mapval))
 	i := 0
 	for key := range mapval {
@@ -73,9 +76,21 @@ func writeMap(writer io.StringWriter, mapval map[string]interface{}) {
 	writer.WriteString("}")
 }
 
-//GOString 把Map信息写出到Go定义格式 map[string]interface { "a" : "b", "c" : 0x0d }
-func GOString(mapval map[string]interface{}) string {
+// GOString 把Map信息写出到Go定义格式 map[string]interface { "a" : "b", "c" : 0x0d }
+func GOString(mapval map[string]any) string {
 	writer := &bytes.Buffer{}
 	writeMap(writer, mapval)
 	return writer.String()
+}
+
+func PlistFile2GOString(file string) error {
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return err
+	}
+	structmap := make(map[string]any)
+	if _, err = plist.Unmarshal(data, structmap); err != nil {
+		return err
+	}
+	return os.WriteFile("string.go", []byte(GOString(structmap)), 0644)
 }

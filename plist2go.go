@@ -56,7 +56,7 @@ func (analyzing *Analyzing) fieldName(name string) string {
 	return strcase.UpperCamelCase(name)
 }
 
-func (analyzing *Analyzing) Analyse(depth int, property *AnalyseProperty, value interface{}) {
+func (analyzing *Analyzing) Analyse(depth int, property *AnalyseProperty, value any) {
 	switch object := value.(type) {
 	case bool:
 		property.Type = "bool"
@@ -76,20 +76,20 @@ func (analyzing *Analyzing) Analyse(depth int, property *AnalyseProperty, value 
 		property.Type = "time.Time"
 	case []uint8:
 		property.Type = "[]byte"
-	case []interface{}:
+	case []any:
 		if len(object) == 0 {
 			property.Type = "[]any"
 		} else {
 			analyzing.AnalyseSlice(depth, property, object)
 		}
-	case map[string]interface{}:
+	case map[string]any:
 		analyzing.AnalyseMap(depth, property, object)
 	default:
 		panic(reflect.TypeOf(object))
 	}
 }
 
-func (analyzing *Analyzing) AnalyseSlice(depth int, property *AnalyseProperty, values []interface{}) {
+func (analyzing *Analyzing) AnalyseSlice(depth int, property *AnalyseProperty, values []any) {
 	properties := make([]*AnalyseProperty, len(values))
 	for i, value := range values {
 		properties[i] = &AnalyseProperty{
@@ -101,7 +101,8 @@ func (analyzing *Analyzing) AnalyseSlice(depth int, property *AnalyseProperty, v
 	}
 	property.Type = "[]" + properties[0].Type
 }
-func (analyzing *Analyzing) AnalyseMap(depth int, property *AnalyseProperty, value map[string]interface{}) {
+
+func (analyzing *Analyzing) AnalyseMap(depth int, property *AnalyseProperty, value map[string]any) {
 	structName := property.Name
 	var structProperties []*AnalyseProperty
 	for name, field := range value {
@@ -128,7 +129,7 @@ func (analyzing *Analyzing) AnalyseMap(depth int, property *AnalyseProperty, val
 }
 
 // Plist2Go plist 到 go 结构体
-func Plist2Go(name string, plistmap map[string]interface{}) string {
+func Plist2Go(name string, plistmap map[string]any) string {
 	analyzse := &Analyzing{}
 	analyzse.Analyse(0, &AnalyseProperty{Name: name}, plistmap)
 	return analyzse.String()
@@ -139,9 +140,9 @@ func PlistFile2Go(file string) error {
 	if err != nil {
 		return err
 	}
-	structmap := make(map[string]interface{})
+	structmap := make(map[string]any)
 	if _, err = plist.Unmarshal(data, structmap); err != nil {
 		return err
 	}
-	return os.WriteFile("request.go", []byte(Plist2Go("Request", structmap)), 0644)
+	return os.WriteFile("struct.go", []byte(Plist2Go("Request", structmap)), 0644)
 }
